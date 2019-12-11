@@ -9,12 +9,12 @@
 RunCCA(object1, object2, ...)
 
 \method{RunCCA}{default}(object1, object2, standardize = TRUE,
-  num.cc = 20, verbose = FALSE, use.cpp = TRUE, ...)
+  num.cc = 20, verbose = FALSE, ...)
 
 \method{RunCCA}{Seurat}(object1, object2, assay1 = NULL, assay2 = NULL,
   num.cc = 20, features = NULL, renormalize = FALSE,
   rescale = FALSE, compute.gene.loadings = TRUE, add.cell.id1 = NULL,
-  add.cell.id2 = NULL, verbose = TRUE, use.cpp = TRUE, ...)
+  add.cell.id2 = NULL, verbose = TRUE, ...)
 }
 \arguments{
 \item{object1}{First Seurat object}
@@ -30,9 +30,7 @@ and mean 0}
 
 \item{num.cc}{Number of canonical vectors to calculate}
 
-\item{verbose}{...}
-
-\item{use.cpp}{...}
+\item{verbose}{Show progress messages}
 
 \item{assay1, assay2}{Assays to pull from in the first and second objects, respectively}
 
@@ -60,8 +58,8 @@ For details about stored CCA calculation parameters, see
 \examples{
 pbmc_small
 # As CCA requires two datasets, we will split our test object into two just for this example
-pbmc1 <- SubsetData(pbmc_small, cells = colnames(x = pbmc_small)[1:40])
-pbmc2 <- SubsetData(pbmc_small, cells = colnames(x = pbmc_small)[41:80])
+pbmc1 <- subset(pbmc_small, cells = colnames(pbmc_small)[1:40])
+pbmc2 <- subset(pbmc_small, cells = colnames(x = pbmc_small)[41:80])
 pbmc1[["group"]] <- "group1"
 pbmc2[["group"]] <- "group2"
 pbmc_cca <- RunCCA(object1 = pbmc1, object2 = pbmc2)

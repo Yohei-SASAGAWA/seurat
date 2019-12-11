@@ -17,6 +17,7 @@ NULL
 #' tree is constructed.
 #'
 #' @param object Seurat object
+#' @param assay Assay to use for the analysis.
 #' @param features Genes to use for the analysis. Default is the set of
 #' variable genes (\code{VariableFeatures(object = object)})
 #' @param dims If set, tree is calculated in PCA space; overrides \code{features}
@@ -28,6 +29,7 @@ NULL
 #' @param reorder.numeric Re-order identity classes according to position on
 #' the tree, assigning a numeric value ('1' is the leftmost node)
 #' @param verbose Show progress updates
+#' @inheritParams AverageExpression
 #'
 #' @return A Seurat object where the cluster tree can be accessed with \code{\link{Tool}}
 #'
@@ -45,14 +47,16 @@ NULL
 #'
 BuildClusterTree <- function(
   object,
+  assay = NULL,
   features = NULL,
   dims = NULL,
   graph = NULL,
-  # do.plot = TRUE,
+  slot = 'data',
   reorder = FALSE,
   reorder.numeric = FALSE,
   verbose = TRUE
 ) {
+  assay <- assay %||% DefaultAssay(object = object)
   if (!is.null(x = graph)) {
     idents <- levels(x = object)
     nclusters <- length(x = idents)
@@ -116,7 +120,9 @@ BuildClusterTree <- function(
     features <- intersect(x = features, y = rownames(x = object))
     data.avg <- AverageExpression(
       object = object,
+      assays = assay,
       features = features,
+      slot = slot,
       verbose = verbose
     )[[1]]
     data.dist <- dist(x = t(x = data.avg[features, ]))
@@ -127,20 +133,23 @@ BuildClusterTree <- function(
     if (verbose) {
       message("Reordering identity classes and rebuilding tree")
     }
-    old.ident.order <- sort(x = levels(x = object))
+    old.ident.order <- levels(x = object)
     data.tree <- Tool(object = object, slot = 'BuildClusterTree')
     all.desc <- GetDescendants(tree = data.tree, node = (data.tree$Nnode + 2))
     all.desc <- old.ident.order[all.desc[all.desc <= (data.tree$Nnode + 1)]]
-    levels(x = object) <- all.desc
+    Idents(object = object) <- factor(x = Idents(object = object), levels = all.desc, ordered = TRUE)
     if (reorder.numeric) {
-      Idents(object = object) <- as.integer(x = Idents(object = object))
+      new.levels <- sort(x = unique(x = as.integer(x = Idents(object = object))))
+      Idents(object = object) <- factor(x = as.integer(x = Idents(object = object)), levels = new.levels)
       object[['tree.ident']] <- as.integer(x = Idents(object = object))
     }
     object <- BuildClusterTree(
       object = object,
+      assay = assay,
       features = features,
       dims = dims,
       graph = graph,
+      slot = slot,
       reorder = FALSE,
       verbose = verbose
     )
@@ -304,6 +313,7 @@ GetRightDescendants <- function(tree, node) {
 # PlotClusterTree(object = pbmc_small)
 #
 MergeNode <- function(object, node.use, rebuild.tree = FALSE, ...) {
+  CheckDots(..., fxns = 'BuldClusterTree')
   object.tree <- object@cluster.tree[[1]]
   node.children <- DFT(
     tree = object.tree,

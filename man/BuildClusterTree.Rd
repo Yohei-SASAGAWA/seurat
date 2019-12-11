@@ -4,11 +4,14 @@
 \alias{BuildClusterTree}
 \title{Phylogenetic Analysis of Identity Classes}
 \usage{
-BuildClusterTree(object, features = NULL, dims = NULL, graph = NULL,
-  reorder = FALSE, reorder.numeric = FALSE, verbose = TRUE)
+BuildClusterTree(object, assay = NULL, features = NULL, dims = NULL,
+  graph = NULL, slot = "data", reorder = FALSE,
+  reorder.numeric = FALSE, verbose = TRUE)
 }
 \arguments{
 \item{object}{Seurat object}
+
+\item{assay}{Assay to use for the analysis.}
 
 \item{features}{Genes to use for the analysis. Default is the set of
 variable genes (\code{VariableFeatures(object = object)})}
@@ -17,6 +20,8 @@ variable genes (\code{VariableFeatures(object = object)})}
 
 \item{graph}{If graph is passed, build tree based on graph connectivity between
 clusters; overrides \code{dims} and \code{features}}
+
+\item{slot}{Slot to use; will be overriden by \code{use.scale} and \code{use.counts}}
 
 \item{reorder}{Re-order identity classes (factor ordering), according to
 position on the tree. This groups similar classes together which can be

@@ -18,6 +18,8 @@ related information needed for performing downstream analyses - namely data inte
 \item{\code{reference.cells}}{List of cell names in the reference dataset - needed when performing data
 transfer.}
 
+\item{\code{reference.objects}}{Position of reference object/s in object.list}
+
 \item{\code{query.cells}}{List of cell names in the query dataset - needed when performing data transfer}
 
 \item{\code{anchors}}{The anchor matrix. This contains the cell indices of both anchor pair cells, the
@@ -27,5 +29,7 @@ the anchor.}
 \item{\code{offsets}}{The offsets used to enable cell look up in downstream functions}
 
 \item{\code{anchor.features}}{The features used when performing anchor finding.}
+
+\item{\code{command}}{Store log of parameters that were used}
 }}
 

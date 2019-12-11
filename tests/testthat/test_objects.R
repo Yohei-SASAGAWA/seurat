@@ -78,11 +78,11 @@ test_that("CreateAssayObject catches improper input", {
   expect_error(CreateAssayObject())
   expect_error(CreateAssayObject(counts = pbmc.raw, data = pbmc.raw))
   pbmc.raw2 <- cbind(pbmc.raw[, 1:10], pbmc.raw[, 1:10])
-  expect_error(CreateAssayObject(counts = pbmc.raw2))
-  expect_error(CreateAssayObject(data = pbmc.raw2))
+  expect_warning(CreateAssayObject(counts = pbmc.raw2))
+  expect_warning(CreateAssayObject(data = pbmc.raw2))
   pbmc.raw2 <- rbind(pbmc.raw[1:10, ], pbmc.raw[1:10, ])
-  expect_error(CreateAssayObject(counts = pbmc.raw2))
-  expect_error(CreateAssayObject(data = pbmc.raw2))
+  expect_warning(CreateAssayObject(counts = pbmc.raw2))
+  expect_warning(CreateAssayObject(data = pbmc.raw2))
   pbmc.raw2 <- pbmc.raw
   colnames(x = pbmc.raw2) <- c()
   expect_error(CreateAssayObject(counts = pbmc.raw2))
@@ -222,21 +222,47 @@ Key(pbmc_small[["RNA2"]]) <- "rna2_"
 test_that("Fetching keyed variables works", {
   x <- FetchData(object = pbmc_small, vars = c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("rna2_", rownames(x = pbmc_small)[1:5])))
   expect_equal(colnames(x = x), c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("rna2_", rownames(x = pbmc_small)[1:5])))
-  x <- FetchData(object = pbmc_small, vars = c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("PC", 1:5)))
-  expect_equal(colnames(x = x), c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("PC", 1:5)))
+  x <- FetchData(object = pbmc_small, vars = c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("PC_", 1:5)))
+  expect_equal(colnames(x = x), c(paste0("rna_", rownames(x = pbmc_small)[1:5]), paste0("PC_", 1:5)))
 })
 
 test_that("Fetching embeddings/loadings not present returns warning or errors", {
-  expect_warning(FetchData(object = pbmc_small, vars = c("PC1", "PC100")))
-  expect_error(FetchData(object = pbmc_small, vars = "PC100"))
+  expect_warning(FetchData(object = pbmc_small, vars = c("PC_1", "PC_100")))
+  expect_error(FetchData(object = pbmc_small, vars = "PC_100"))
 })
 
 bad.gene <- GetAssayData(object = pbmc_small[["RNA"]], slot = "data")
 rownames(x = bad.gene)[1] <- paste0("rna_", rownames(x = bad.gene)[1])
 pbmc_small[["RNA"]]@data <- bad.gene
 
-# errors - when key conflicts with feature name
-#
+# Tests for WhichCells
+# ------------------------------------------------------------------------------
 
+test_that("Specifying cells works", {
+  test.cells <- Cells(x = pbmc_small)[1:10]
+  expect_equal(WhichCells(object = pbmc_small, cells = test.cells), test.cells)
+  expect_equal(WhichCells(object = pbmc_small, cells = test.cells, invert = TRUE), setdiff(Cells(x = pbmc_small), test.cells))
+})
+
+test_that("Specifying idents works", {
+  c12 <- WhichCells(object = pbmc_small, idents = c(1, 2))
+  expect_equal(length(x = c12), 44)
+  expect_equal(c12[44], "CTTGATTGATCTTC")
+  expect_equal(c12, WhichCells(object = pbmc_small, idents = 0, invert = TRUE))
+})
+
+test_that("downsample works", {
+  expect_equal(length(x = WhichCells(object = pbmc_small, downsample = 5)), 15)
+  expect_equal(length(x = WhichCells(object = pbmc_small, downsample = 100)), 80)
+})
+
+test_that("passing an expression works", {
+  lyz.pos <- WhichCells(object = pbmc_small, expression = LYZ > 1)
+  expect_true(all(GetAssayData(object = pbmc_small, slot = "data")["LYZ", lyz.pos] > 1))
+  # multiple values in expression
+  lyz.pos <- WhichCells(object = pbmc_small, expression = LYZ > 1 & groups == "g1")
+  expect_equal(length(x = lyz.pos), 30)
+  expect_equal(lyz.pos[30], "CTTGATTGATCTTC")
+})
 
 

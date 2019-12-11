@@ -6,8 +6,8 @@
 \title{Gene expression markers for all identity classes}
 \usage{
 FindAllMarkers(object, assay = NULL, features = NULL,
-  logfc.threshold = 0.25, test.use = "wilcox", min.pct = 0.1,
-  min.diff.pct = -Inf, node = NULL, verbose = TRUE,
+  logfc.threshold = 0.25, test.use = "wilcox", slot = "data",
+  min.pct = 0.1, min.diff.pct = -Inf, node = NULL, verbose = TRUE,
   only.pos = FALSE, max.cells.per.ident = Inf, random.seed = 1,
   latent.vars = NULL, min.cells.feature = 3, min.cells.group = 3,
   pseudocount.use = 1, return.thresh = 0.01, ...)
@@ -37,7 +37,7 @@ Increasing logfc.threshold speeds up the function, but can miss weaker signals.}
  each of the cells in cells.2). An AUC value of 0 also means there is perfect
  classification, but in the other direction. A value of 0.5 implies that
  the gene has no predictive power to classify the two groups. Returns a
- 'predictive power' (abs(AUC-0.5)) ranked matrix of putative differentially
+ 'predictive power' (abs(AUC-0.5) * 2) ranked matrix of putative differentially
  expressed genes.
  \item{"t"} : Identify differentially expressed genes between two groups of
  cells using the Student's t-test.
@@ -51,10 +51,10 @@ Increasing logfc.threshold speeds up the function, but can miss weaker signals.}
  expressed genes. Constructs a logistic regression model predicting group
  membership based on each feature individually and compares this to a null
  model with a likelihood ratio test.
- \item{"MAST} : Identifies differentially expressed genes between two groups
+ \item{"MAST"} : Identifies differentially expressed genes between two groups
  of cells using a hurdle model tailored to scRNA-seq data. Utilizes the MAST
  package to run the DE testing.
- \item{"DESeq2} : Identifies differentially expressed genes between two groups
+ \item{"DESeq2"} : Identifies differentially expressed genes between two groups
  of cells based on a model using DESeq2 which uses a negative binomial
  distribution (Love et al, Genome Biology, 2014).This test does not support
  pre-filtering of genes based on average difference (or percent detection rate)
@@ -63,6 +63,9 @@ Increasing logfc.threshold speeds up the function, but can miss weaker signals.}
  please install DESeq2, using the instructions at
  https://bioconductor.org/packages/release/bioc/html/DESeq2.html
 }}
+
+\item{slot}{Slot to pull data from; note that if \code{test.use} is "negbinom", "poisson", or "DESeq2",
+\code{slot} will be set to "counts"}
 
 \item{min.pct}{only test genes that are detected in a minimum fraction of
 min.pct cells in either of the two populations. Meant to speed up the function
@@ -109,10 +112,11 @@ Finds markers (differentially expressed genes) for each of the identity classes 
 # Find markers for all clusters
 all.markers <- FindAllMarkers(object = pbmc_small)
 head(x = all.markers)
-
+\dontrun{
 # Pass a value to node as a replacement for FindAllMarkersNode
 pbmc_small <- BuildClusterTree(object = pbmc_small)
 all.markers <- FindAllMarkers(object = pbmc_small, node = 4)
 head(x = all.markers)
+}
 
 }

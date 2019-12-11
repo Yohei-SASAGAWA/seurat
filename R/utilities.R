@@ -6,15 +6,15 @@ NULL
 # Functions
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-#' Calculate module scores for featre expression programs in single cells
+#' Calculate module scores for feature expression programs in single cells
 #'
 #' Calculate the average expression levels of each program (cluster) on single cell level,
-#' subtracted by the aggregated expression of control featre sets.
-#' All analyzed featres are binned based on averaged expression, and the control featres are
+#' subtracted by the aggregated expression of control feature sets.
+#' All analyzed features are binned based on averaged expression, and the control features are
 #' randomly selected from each bin.
 #'
 #' @param object Seurat object
-#' @param features Featre expression programs in list
+#' @param features Feature expression programs in list
 #' @param pool List of features to check expression levels agains, defaults to \code{rownames(x = object)}
 #' @param nbin Number of bins of aggregate expression levels for all analyzed features
 #' @param ctrl Number of control features selected from the same bin per analyzed feature
@@ -22,10 +22,13 @@ NULL
 #' @param assay Name of assay to use
 #' @param name Name for the expression programs
 #' @param seed Set a random seed
+#' @param search Search for symbol synonyms for features in \code{features} that
+#' don't match features in \code{object}? Searches the HGNC's gene names database;
+#' see \code{\link{UpdateSymbolList}} for more details
+#' @param ... Extra parameters passed to \code{\link{UpdateSymbolList}}
 #'
 #' @return Returns a Seurat object with module scores added to object meta data
 #'
-# @importFrom Hmisc cut2
 #' @importFrom ggplot2 cut_number
 #' @importFrom Matrix rowMeans colMeans
 #'
@@ -70,7 +73,9 @@ AddModuleScore <- function(
   k = FALSE,
   assay = NULL,
   name = 'Cluster',
-  seed = 1
+  seed = 1,
+  search = FALSE,
+  ...
 ) {
   set.seed(seed = seed)
   assay.old <- DefaultAssay(object = object)
@@ -92,6 +97,48 @@ AddModuleScore <- function(
     features <- lapply(
       X = features,
       FUN = function(x) {
+        missing.features <- setdiff(x = x, y = rownames(x = object))
+        if (length(x = missing.features) > 0) {
+          warning(
+            "The following features are not present in the object: ",
+            paste(missing.features, collapse = ", "),
+            ifelse(
+              test = search,
+              yes = ", attempting to find updated synonyms",
+              no = ", not searching for symbol synonyms"
+            ),
+            call. = FALSE,
+            immediate. = TRUE
+          )
+          if (search) {
+            tryCatch(
+              expr = {
+                updated.features <- UpdateSymbolList(symbols = missing.features, ...)
+                names(x = updated.features) <- missing.features
+                for (miss in names(x = updated.features)) {
+                  index <- which(x == miss)
+                  x[index] <- updated.features[miss]
+                }
+              },
+              error = function(...) {
+                warning(
+                  "Could not reach HGNC's gene names database",
+                  call. = FALSE,
+                  immediate. = TRUE
+                )
+              }
+            )
+            missing.features <- setdiff(x = x, y = rownames(x = object))
+            if (length(x = missing.features) > 0) {
+              warning(
+                "The following features are still not present in the object: ",
+                paste(missing.features, collapse = ", "),
+                call. = FALSE,
+                immediate. = TRUE
+              )
+            }
+          }
+        }
         return(intersect(x = x, y = rownames(x = object)))
       }
     )
@@ -119,8 +166,8 @@ AddModuleScore <- function(
   pool <- pool %||% rownames(x = object)
   data.avg <- Matrix::rowMeans(x = assay.data[pool, ])
   data.avg <- data.avg[order(data.avg)]
-  data.cut <- cut_number(x = data.avg, n = nbin, labels = FALSE, right = FALSE)
-  # data.cut <- as.numeric(x = Hmisc::cut2(x = data.avg, m = round(x = length(x = data.avg) / (nbin + 1))))
+  data.cut <- cut_number(x = data.avg + rnorm(n = length(data.avg))/1e30, n = nbin, labels = FALSE, right = FALSE)
+  #data.cut <- as.numeric(x = Hmisc::cut2(x = data.avg, m = round(x = length(x = data.avg) / (nbin + 1))))
   names(x = data.cut) <- names(x = data.avg)
   ctrl.use <- vector(mode = "list", length = cluster.length)
   for (i in 1:cluster.length) {
@@ -161,7 +208,7 @@ AddModuleScore <- function(
   features.scores.use <- as.data.frame(x = t(x = features.scores.use))
   rownames(x = features.scores.use) <- colnames(x = object)
   object[[colnames(x = features.scores.use)]] <- features.scores.use
-  gc(verbose = FALSE)
+  CheckGC()
   DefaultAssay(object = object) <- assay.old
   return(object)
 }
@@ -174,12 +221,13 @@ AddModuleScore <- function(
 #' Averaging is done in non-log space.
 #'
 #' @param object Seurat object
-#' @param assay Which assay to use. Default is all assays.
-#' @param features Features to analyze. Default is all features in the assay.
-#' @param return.seurat Whether to return the data as a Seurat object. Default is FALSE.
-#' @param add.ident Place an additional label on each cell prior to averaging (very useful if you want to observe cluster averages, separated by replicate, for example).
-#' @param use.scale Use scaled values for gene expression
-#' @param use.counts Use count values for gene expression
+#' @param assays Which assays to use. Default is all assays
+#' @param features Features to analyze. Default is all features in the assay
+#' @param return.seurat Whether to return the data as a Seurat object. Default is FALSE
+#' @param add.ident Place an additional label on each cell prior to averaging (very useful if you want to observe cluster averages, separated by replicate, for example)
+#' @param slot Slot to use; will be overriden by \code{use.scale} and \code{use.counts}
+#' @param use.scale Use scaled values for feature expression
+#' @param use.counts Use count values for feature expression
 #' @param verbose Print messages and show progress bar
 #' @param ... Arguments to be passed to methods such as \code{\link{CreateSeuratObject}}
 #'
@@ -193,22 +241,43 @@ AddModuleScore <- function(
 #'
 AverageExpression <- function(
   object,
-  assay = NULL,
+  assays = NULL,
   features = NULL,
   return.seurat = FALSE,
   add.ident = NULL,
+  slot = 'data',
   use.scale = FALSE,
   use.counts = FALSE,
   verbose = TRUE,
   ...
 ) {
-  assay <- assay %||% DefaultAssay(object)
-  ident.orig <- Idents(object)
-  orig.levels <- levels(x = Idents(object))
+  CheckDots(..., fxns = 'CreateSeuratObject')
+  if (use.scale) {
+    .Deprecated(msg = "'use.scale' is a deprecated argument, please use the 'slot' argument instead")
+    slot <- 'scale.data'
+  }
+  if (use.counts) {
+    .Deprecated(msg = "'use.counts' is a deprecated argument, please use the 'slot' argument instead")
+    if (use.scale) {
+      warning("Both 'use.scale' and 'use.counts' were set; using counts", call. = FALSE, immediate. = TRUE)
+    }
+    slot <- 'counts'
+  }
+  fxn.average <- switch(
+    EXPR = slot,
+    'data' = function(x) {
+      return(mean(x = expm1(x = x)))
+    },
+    mean
+  )
+  object.assays <- FilterObjects(object = object, classes.keep = 'Assay')
+  assays <- assays %||% object.assays
+  ident.orig <- Idents(object = object)
+  orig.levels <- levels(x = Idents(object = object))
   ident.new <- c()
-  if (!all(assay %in% names(object@assays))) {
-    assay <- assay[assay %in% names(object@assays)]
-    if (length(assay) == 0) {
+  if (!all(assays %in% object.assays)) {
+    assays <- assays[assays %in% object.assays]
+    if (length(assays) == 0) {
       stop("None of the requested assays are present in the object")
     } else {
       warning("Requested assays that do not exist in object. Proceeding with existing assays only.")
@@ -223,22 +292,12 @@ AverageExpression <- function(
     )
     Idents(object, cells = rownames(new.data)) <- new.ident
   }
-  slot.use <- "data"
-  fxn.average <- function(x) mean(expm1(x))
-  if (use.scale) {
-    slot.use <- "scale.data"
-    fxn.average <- mean
-  }
-  if (use.counts) {
-    slot.use <- "counts"
-    fxn.average <- mean
-  }
   data.return <- list()
-  for (i in 1:length(x = assay)) {
+  for (i in 1:length(x = assays)) {
     data.use <- GetAssayData(
       object = object,
-      assay = assay[i],
-      slot = slot.use
+      assay = assays[i],
+      slot = slot
     )
     features.assay <- features
     if (length(x = intersect(x = features, y = rownames(x = data.use))) < 1 ) {
@@ -251,8 +310,9 @@ AverageExpression <- function(
       if (length(x = temp.cells) == 1) {
         data.temp <- (data.use[features.assay, temp.cells])
         # transform data if needed (alternative: apply fxn.average to single value above)
-        if (!(use.scale | use.counts)) { # equivalent: slot.use == "data"
-          data.temp <- expm1(data.temp)
+        # if (!(use.scale | use.counts)) { # equivalent: slot.use == "data"
+        if (slot == 'data') {
+          data.temp <- expm1(x = data.temp)
         }
       }
       if (length(x = temp.cells) > 1 ) {
@@ -265,7 +325,7 @@ AverageExpression <- function(
       data.all <- cbind(data.all, data.temp)
       colnames(x = data.all)[ncol(x = data.all)] <- j
       if (verbose) {
-        message(paste("Finished averaging", assay[i], "for cluster", j))
+        message(paste("Finished averaging", assays[i], "for cluster", j))
       }
       if (i == 1) {
         ident.new <- c(ident.new, as.character(x = ident.orig[temp.cells[1]]))
@@ -273,9 +333,8 @@ AverageExpression <- function(
     }
     names(x = ident.new) <- levels(x = Idents(object))
     data.return[[i]] <- data.all
-    names(x = data.return)[i] <- assay[[i]]
+    names(x = data.return)[i] <- assays[[i]]
   }
-
   if (return.seurat) {
     toRet <- CreateSeuratObject(
       counts = data.return[[1]],
@@ -283,24 +342,24 @@ AverageExpression <- function(
       assay = names(x = data.return)[1],
       ...
     )
-
     #for multimodal data
     if (length(x = data.return) > 1) {
       for (i in 2:length(x = data.return)) {
         toRet[[names(x = data.return)[i]]] <- CreateAssayObject(counts = data.return[[i]])
       }
     }
-    Idents(toRet, cells = colnames(toRet)) <- ident.new[colnames(toRet)]
-    Idents(toRet) <- factor(
-      x = Idents(toRet),
+    if (DefaultAssay(object = object) %in% names(x = data.return)) {
+      DefaultAssay(object = toRet) <- DefaultAssay(object = object)
+    }
+    Idents(toRet, cells = colnames(x = toRet)) <- ident.new[colnames(x = toRet)]
+    Idents(object = toRet) <- factor(
+      x = Idents(object = toRet),
       levels = as.character(x = orig.levels),
       ordered = TRUE
     )
-
     # finish setting up object if it is to be returned
-    toRet <- NormalizeData(toRet, verbose = verbose)
-    toRet <- ScaleData(toRet, verbose = verbose)
-
+    toRet <- NormalizeData(object = toRet, verbose = verbose)
+    toRet <- ScaleData(object = toRet, verbose = verbose)
     return(toRet)
   } else {
     return(data.return)
@@ -342,6 +401,7 @@ CaseMatch <- function(search, match) {
 #' @param s.features A vector of features associated with S phase
 #' @param g2m.features A vector of features associated with G2M phase
 #' @param set.ident If true, sets identity to phase assignments
+#' @param ... Arguments to be passed to \code{\link{AddModuleScore}}
 #' Stashes old identities in 'old.ident'
 #'
 #' @return A Seurat object with the following columns added to object meta data: S.Score, G2M.Score, and Phase
@@ -367,7 +427,8 @@ CellCycleScoring <- function(
   object,
   s.features,
   g2m.features,
-  set.ident = FALSE
+  set.ident = FALSE,
+  ...
 ) {
   name <- 'Cell Cycle'
   features <- list('S.Score' = s.features, 'G2M.Score' = g2m.features)
@@ -375,12 +436,13 @@ CellCycleScoring <- function(
     object = object,
     features = features,
     name = name,
-    ctrl = min(vapply(X = features, FUN = length, FUN.VALUE = numeric(length = 1)))
+    ctrl = min(vapply(X = features, FUN = length, FUN.VALUE = numeric(length = 1))),
+    ...
   )
   cc.columns <- grep(pattern = name, x = colnames(x = object.cc[[]]), value = TRUE)
   cc.scores <- object.cc[[cc.columns]]
   rm(object.cc)
-  gc(verbose = FALSE)
+  CheckGC()
   assignments <- apply(
     X = cc.scores,
     MARGIN = 1,
@@ -481,11 +543,12 @@ CollapseSpeciesExpressionMatrix <- function(
 #' cell.manhattan.dist <- CustomDistance(input.data, manhattan.distance)
 #'
 CustomDistance <- function(my.mat, my.function, ...) {
+  CheckDots(..., fxns = my.function)
   n <- ncol(x = my.mat)
   mat <- matrix(data = 0, ncol = n, nrow = n)
   colnames(x = mat) <- rownames(x = mat) <- colnames(x = my.mat)
   for (i in 1:nrow(x = mat)) {
-    for(j in 1:ncol(x = mat)) {
+    for (j in 1:ncol(x = mat)) {
       mat[i,j] <- my.function(my.mat[, i], my.mat[, j], ...)
     }
   }
@@ -555,7 +618,7 @@ ExpMean <- function(x) {
 ExportToCellbrowser <- function(
   object,
   dir,
-  dataset.name = slot(object = object, name = 'project.name'),
+  dataset.name = Project(object = object),
   reductions = "tsne",
   markers.file = NULL,
   cluster.field = "Cluster",
@@ -785,6 +848,128 @@ ExpVar <- function(x) {
   return(log1p(x = var(x = expm1(x = x))))
 }
 
+#' Get updated synonyms for gene symbols
+#'
+#' Find current gene symbols based on old or alias symbols using the gene
+#' names database from the HUGO Gene Nomenclature Committee (HGNC)
+#'
+#' @details For each symbol passed, we query the HGNC gene names database for
+#' current symbols that have the provided symbol as either an alias
+#' (\code{alias_symbol}) or old (\code{prev_symbol}) symbol. All other queries
+#' are \strong{not} supported.
+#'
+#' @note This function requires internet access
+#'
+#' @param symbols A vector of gene symbols
+#' @param timeout Time to wait before cancelling query in seconds
+#' @param several.ok Allow several current gene sybmols for each provided symbol
+#' @param verbose Show a progress bar depicting search progress
+#' @param ... Extra parameters passed to \code{\link[httr]{GET}}
+#'
+#' @return For \code{GeneSymbolThesarus}, if \code{several.ok}, a named list
+#' where each entry is the current symbol found for each symbol provided and the
+#' names are the provided symbols. Otherwise, a named vector with the same information.
+#'
+#' @source \url{https://www.genenames.org/} \url{http://rest.genenames.org/}
+#'
+#' @importFrom utils txtProgressBar setTxtProgressBar
+#' @importFrom httr GET accept_json timeout status_code content
+#'
+#' @rdname UpdateSymbolList
+#' @name UpdateSymbolList
+#'
+#' @export
+#'
+#' @seealso \code{\link[httr]{GET}}
+#'
+#' @examples
+#' \dontrun{
+#' GeneSybmolThesarus(symbols = c("FAM64A"))
+#' }
+#'
+GeneSymbolThesarus <- function(
+  symbols,
+  timeout = 10,
+  several.ok = FALSE,
+  verbose = TRUE,
+  ...
+) {
+  db.url <- 'http://rest.genenames.org/fetch'
+  search.types <- c('alias_symbol', 'prev_symbol')
+  synonyms <- vector(mode = 'list', length = length(x = symbols))
+  not.found <- vector(mode = 'logical', length = length(x = symbols))
+  multiple.found <- vector(mode = 'logical', length = length(x = symbols))
+  names(x = multiple.found) <- names(x = not.found) <- names(x = synonyms) <- symbols
+  if (verbose) {
+    pb <- txtProgressBar(max = length(x = symbols), style = 3, file = stderr())
+  }
+  for (symbol in symbols) {
+    sym.syn <- character()
+    for (type in search.types) {
+      response <- GET(
+        url = paste(db.url, type, symbol, sep = '/'),
+        config = c(accept_json(), timeout(seconds = timeout)),
+        ...
+      )
+      if (!identical(x = status_code(x = response), y = 200L)) {
+        next
+      }
+      response <- content(x = response)
+      if (response$response$numFound != 1) {
+        if (response$response$numFound > 1) {
+          warning(
+            "Multiple hits found for ",
+            symbol,
+            " as ",
+            type,
+            ", skipping",
+            call. = FALSE,
+            immediate. = TRUE
+          )
+        }
+        next
+      }
+      sym.syn <- c(sym.syn, response$response$docs[[1]]$symbol)
+    }
+    not.found[symbol] <- length(x = sym.syn) < 1
+    multiple.found[symbol] <- length(x = sym.syn) > 1
+    if (length(x = sym.syn) == 1 || (length(x = sym.syn) > 1 && several.ok)) {
+      synonyms[[symbol]] <- sym.syn
+    }
+    if (verbose) {
+      setTxtProgressBar(pb = pb, value = pb$getVal() + 1)
+    }
+  }
+  if (verbose) {
+    close(con = pb)
+  }
+  if (sum(not.found) > 0) {
+    warning(
+      "The following symbols had no synonyms: ",
+      paste(names(x = which(x = not.found)), collapse = ', '),
+      call. = FALSE,
+      immediate. = TRUE
+    )
+  }
+  if (sum(multiple.found) > 0) {
+    msg <- paste(
+      "The following symbols had multiple synonyms:",
+      paste(names(x = which(x = multiple.found)), sep = ', ')
+    )
+    if (several.ok) {
+      message(msg)
+      message("Including anyways")
+    } else {
+      warning(msg, call. = FALSE, immediate. = TRUE)
+    }
+  }
+  synonyms <- Filter(f = Negate(f = is.null), x = synonyms)
+  if (!several.ok) {
+    synonyms <- unlist(x = synonyms)
+  }
+  return(synonyms)
+}
+
 #' Calculate the variance to mean ratio of logged values
 #'
 #' Calculate the variance to mean ratio (VMR) in non-logspace (return answer in
@@ -874,6 +1059,82 @@ MinMax <- function(data, min, max) {
   return(data2)
 }
 
+#' Calculate the percentage of all counts that belong to a given set of features
+#'
+#' This function enables you to easily calculate the percentage of all the counts belonging to a
+#' subset of the possible features for each cell. This is useful when trying to compute the percentage
+#' of transcripts that map to mitochondrial genes for example. The calculation here is simply the
+#' column sum of the matrix present in the counts slot for features belonging to the set divided by
+#' the column sum for all features times 100.
+#'
+#' @param object A Seurat object
+#' @param pattern A regex pattern to match features against
+#' @param features A defined feature set. If features provided, will ignore the pattern matching
+#' @param col.name Name in meta.data column to assign. If this is not null, returns a Seurat object
+#' with the proportion of the feature set stored in metadata.
+#' @param assay Assay to use
+#'
+#' @return Returns a vector with the proportion of the feature set or if md.name is set, returns a
+#' Seurat object with the proportion of the feature set stored in metadata.
+#' @importFrom Matrix colSums
+#' @export
+#'
+#' @examples
+#' # Calculate the proportion of transcripts mapping to mitochondrial genes
+#' # NOTE: The pattern provided works for human gene names. You may need to adjust depending on your
+#' # system of interest
+#' pbmc_small[["percent.mt"]] <- PercentageFeatureSet(object = pbmc_small, pattern = "^MT-")
+#'
+PercentageFeatureSet <- function(
+  object,
+  pattern = NULL,
+  features = NULL,
+  col.name = NULL,
+  assay = NULL
+) {
+  assay <- assay %||% DefaultAssay(object = object)
+  if (!is.null(x = features) && !is.null(x = pattern)) {
+    warning("Both pattern and features provided. Pattern is being ignored.")
+  }
+  features <- features %||% grep(pattern = pattern, x = rownames(x = object[[assay]]), value = TRUE)
+  percent.featureset <- colSums(x = GetAssayData(object = object, slot = "counts")[features, , drop = FALSE])/
+    object[[paste0("nCount_", assay)]] * 100
+  if (!is.null(x = col.name)) {
+    object <- AddMetaData(object = object, metadata = percent.featureset, col.name = col.name)
+    return(object)
+  }
+  return(percent.featureset)
+}
+
+#' Regroup idents based on meta.data info
+#'
+#' For cells in each ident, set a new identity based on the most common value
+#' of a specified metadata column.
+#'
+#' @param object Seurat object
+#' @param metadata Name of metadata column
+#' @return A Seurat object with the active idents regrouped
+#'
+#' @export
+#'
+#' @examples
+#' pbmc_small <- RegroupIdents(pbmc_small, metadata = "groups")
+#'
+RegroupIdents <- function(object, metadata) {
+  for (ii in levels(x = object)) {
+    ident.cells <- WhichCells(object = object, idents = ii)
+    if (length(x = ident.cells) == 0) {
+      next
+    }
+    new.ident <- names(x = which.max(x = table(object[[metadata]][ident.cells, ])))
+    if (is.null(x = new.ident)) {
+      stop("Cluster ", ii, " contains only cells with NA values in the '", metadata, "' metadata column.")
+    }
+    Idents(object = object, cells = ident.cells) <- new.ident
+  }
+  return(object)
+}
+
 #' Stop Cellbrowser web server
 #'
 #' @importFrom reticulate py_module_available
@@ -895,20 +1156,55 @@ StopCellbrowser <- function() {
   }
 }
 
+#' @rdname UpdateSymbolList
+#'
+#' @return For \code{UpdateSymbolList}, \code{symbols} with updated symbols from
+#' HGNC's gene names database
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' UpdateSymbolList(symbols = cc.genes$s.genes)
+#' }
+#'
+UpdateSymbolList <- function(
+  symbols,
+  timeout = 10,
+  several.ok = FALSE,
+  verbose = TRUE,
+  ...
+) {
+  new.symbols <- suppressWarnings(expr = GeneSymbolThesarus(
+    symbols = symbols,
+    timeout = timeout,
+    several.ok = several.ok,
+    verbose = verbose,
+    ...
+  ))
+  if (length(x = new.symbols) < 1) {
+    warning("No updated symbols found", call. = FALSE, immediate. = TRUE)
+  } else {
+    if (verbose) {
+      message("Found updated symbols for ", length(x = new.symbols), " symbols")
+      x <- sapply(X = new.symbols, FUN = paste, collapse = ', ')
+      message(paste(names(x = x), x, sep = ' -> ', collapse = '\n'))
+    }
+    for (sym in names(x = new.symbols)) {
+      index <- which(x = symbols == sym)
+      symbols <- append(
+        x = symbols[-index],
+        values = new.symbols[[sym]],
+        after = index - 1
+      )
+    }
+  }
+  return(symbols)
+}
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Methods for Seurat-defined generics
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-#' @importFrom methods as
-#' @importClassesFrom Matrix dgCMatrix
-#'
-#' @rdname as.sparse
-#' @export
-#' @method as.sparse data.frame
-#'
-as.sparse.data.frame <- function(x, ...) {
-  return(as(object = as.matrix(x = x), Class = 'dgCMatrix'))
-}
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Methods for R-defined generics
@@ -1032,52 +1328,102 @@ L2Norm <- function(mat, MARGIN = 1){
 #
 # @return ...
 #
-#' @importFrom utils argsAnywhere getAnywhere
+# @importFrom utils argsAnywhere getAnywhere
+#' @importFrom utils isS3stdGeneric methods argsAnywhere isS3method
 #
 # @examples
 #
 CheckDots <- function(..., fxns = NULL) {
-  args.names <- names(x = c(...))
-  if (length(x = c(...)) == 0) {
+  args.names <- names(x = list(...))
+  if (length(x = list(...)) == 0) {
     return(invisible(x = NULL))
   }
   if (is.null(x = args.names)) {
     stop("No named arguments passed")
   }
-  fxn.args <- lapply(
+  if (length(x = fxns) == 1) {
+    fxns <- list(fxns)
+  }
+  for (f in fxns) {
+    if (!(is.character(x = f) || is.function(x = f))) {
+      stop("CheckDots only works on characters or functions, not ", class(x = f))
+    }
+  }
+  fxn.args <- suppressWarnings(expr = sapply(
     X = fxns,
     FUN = function(x) {
-      if (is.character(x = x)) {
-        if (any(grepl(pattern = 'UseMethod', x = as.character(x = getAnywhere(x = x))))) {
-          x <- paste0(x, '.default')
+      x <- tryCatch(
+        expr = if (isS3stdGeneric(f = x)) {
+          as.character(x = methods(generic.function = x))
+        } else {
+          x
+        },
+        error = function(...) {
+          return(x)
         }
-        x <- argsAnywhere(x = x)
-      }
-      if (is.function(x = x)) {
-        return(names(x = formals(fun = x)))
-      } else {
-        stop("CheckDots only works on characters or functions, not ", class(x = x))
-      }
-    }
-  )
-  if (any(grepl(pattern = '...', x = fxn.args, fixed = TRUE))) {
-    dotted <- grepl(pattern = '...', x = fxn.args, fixed = TRUE)
-    dfxn <- fxns[dotted]
-    if (any(sapply(X = dfxn, FUN = is.character))) {
-      message(
-        "The following functions accept the dots: ",
-        paste(Filter(f = is.character, x = dfxn), collapse = ', ')
       )
-      dfxn <- Filter(f = Negate(f = is.character), x = dfxn)
-      if (length(x = dfxn) > 0) {
+      x <- if (is.character(x = x)) {
+        sapply(X = x, FUN = argsAnywhere, simplify = FALSE, USE.NAMES = TRUE)
+      } else if (length(x = x) <= 1) {
+        list(x)
+      }
+      return(sapply(
+        X = x,
+        FUN = function(f) {
+          return(names(x = formals(fun = f)))
+        },
+        simplify = FALSE,
+        USE.NAMES = TRUE
+      ))
+    },
+    simplify = FALSE,
+    USE.NAMES = TRUE
+  ))
+  fxn.args <- unlist(x = fxn.args, recursive = FALSE)
+  fxn.null <- vapply(X = fxn.args, FUN = is.null, FUN.VALUE = logical(length = 1L))
+  if (all(fxn.null) && !is.null(x = fxns)) {
+    stop("None of the functions passed could be found")
+  } else if (any(fxn.null)) {
+    warning(
+      "The following functions passed could not be found: ",
+      paste(names(x = which(x = fxn.null)), collapse = ', '),
+      call. = FALSE,
+      immediate. = TRUE
+    )
+    fxn.args <- Filter(f = Negate(f = is.null), x = fxn.args)
+  }
+  dfxns <- vector(mode = 'logical', length = length(x = fxn.args))
+  names(x = dfxns) <- names(x = fxn.args)
+  for (i in 1:length(x = fxn.args)) {
+    dfxns[i] <- any(grepl(pattern = '...', x = fxn.args[[i]], fixed = TRUE))
+  }
+  if (any(dfxns)) {
+    dfxns <- names(x = which(x = dfxns))
+    if (any(nchar(x = dfxns) > 0)) {
+      fx <- vapply(
+        X = Filter(f = nchar, x = dfxns),
+        FUN = function(x) {
+          if (isS3method(method = x)) {
+            x <- unlist(x = strsplit(x = x, split = '\\.'))
+            x <- x[length(x = x) - 1L]
+          }
+          return(x)
+        },
+        FUN.VALUE = character(length = 1L)
+      )
+      message(
+        "The following functions and any applicable methods accept the dots: ",
+        paste(unique(x = fx), collapse = ', ')
+      )
+      if (any(nchar(x = dfxns) < 1)) {
         message(
-          "In addition, there are ",
-          length(x = dfxn),
-          " unnamed function(s) that accept the dots"
+          "In addition, there is/are ",
+          length(x = Filter(f = Negate(f = nchar), x = dfxns)),
+          " other function(s) that accept(s) the dots"
         )
       }
     } else {
-      message("There are ", length(x = dfxn), ' functions provided that accept the dots')
+      message("There is/are ", length(x = dfxns), 'function(s) that accept(s) the dots')
     }
   } else {
     unused <- Filter(
@@ -1087,12 +1433,27 @@ CheckDots <- function(..., fxns = NULL) {
       x = args.names
     )
     if (length(x = unused) > 0) {
-      warning(
+      msg <- paste0(
         "The following arguments are not used: ",
-        paste(unused, collapse = ', '),
-        call. = FALSE,
-        immediate. = TRUE
+        paste(unused, collapse = ', ')
       )
+      switch(
+        EXPR = getOption(x = "Seurat.checkdots"),
+        "warn" = warning(msg, call. = FALSE, immediate. = TRUE),
+        "stop" = stop(msg),
+        "silent" = NULL,
+        stop("Invalid Seurat.checkdots option. Please choose one of warn, stop, silent")
+      )
+      unused.hints <- sapply(X = unused, FUN = OldParamHints)
+      names(x = unused.hints) <- unused
+      unused.hints <- na.omit(object = unused.hints)
+      if (length(x = unused.hints) > 0) {
+        message(
+          "Suggested parameter: ",
+          paste(unused.hints, "instead of", names(x = unused.hints), collapse = '; '),
+          "\n"
+        )
+      }
     }
   }
 }
@@ -1106,12 +1467,7 @@ CheckDots <- function(..., fxns = NULL) {
 # @return Returns list of objects with duplicate cells renamed to be unique
 #
 CheckDuplicateCellNames <- function(object.list, verbose = TRUE, stop = FALSE) {
-  cell.names <- unlist(
-    x = sapply(
-      X = 1:length(x = object.list),
-      FUN = function(x) Cells(object = object.list[[x]])
-      )
-    )
+  cell.names <- unlist(x = lapply(X = object.list, FUN = colnames))
   if (any(duplicated(x = cell.names))) {
     if (stop) {
       stop("Duplicate cell names present across objects provided.")
@@ -1119,12 +1475,25 @@ CheckDuplicateCellNames <- function(object.list, verbose = TRUE, stop = FALSE) {
     if (verbose) {
       warning("Some cell names are duplicated across objects provided. Renaming to enforce unique cell names.")
     }
-    object.list <- sapply(
+    object.list <- lapply(
       X = 1:length(x = object.list),
-      FUN = function(x) RenameCells(object = object.list[[x]], new.names = paste0(Cells(object = object.list[[x]]), "_", x))
+      FUN = function(x) {
+        return(RenameCells(
+          object = object.list[[x]],
+          new.names = paste0(Cells(x = object.list[[x]]), "_", x)
+        ))
+      }
     )
   }
   return(object.list)
+}
+
+# Call gc() to perform garbage collection
+#
+CheckGC <- function() {
+  if (getOption(x = "Seurat.memsafe")) {
+    gc(verbose = FALSE)
+  }
 }
 
 # Extract delimiter information from a string.
@@ -1152,7 +1521,7 @@ ExtractField <- function(string, field = 1, delim = "_") {
 
 # Resize GenomicRanges upstream and or downstream
 # from https://support.bioconductor.org/p/78652/
-# 
+#
 Extend <- function(x, upstream = 0, downstream = 0) {
   if (any(GenomicRanges::strand(x = x) == "*")) {
     warning("'*' ranges were treated as '+'")
@@ -1189,6 +1558,22 @@ IsMatrixEmpty <- function(x) {
   return(all(matrix.dims == 0) || matrix.na)
 }
 
+# Check whether an assay has been processed by sctransform
+#
+# @param assay assay to check
+#
+# @return Boolean
+#
+IsSCT <- function(assay) {
+  if (is.list(x = assay)) {
+    sct.check <- lapply(X = assay, FUN = function(x) {
+      return(!is.null(x = Misc(object = x, slot = 'vst.out')) | !is.null(x = Misc(object = x, slot = 'vst.set')))
+    })
+    return(unlist(x = sct.check))
+  }
+  return(!is.null(x = Misc(assay, slot = 'vst.out')))
+}
+
 # Check the length of components of a list
 #
 # @param values A list whose components should be checked
@@ -1206,55 +1591,23 @@ LengthCheck <- function(values, cutoff = 0) {
   ))
 }
 
-# Logs a command run, storing the name, timestamp, and argument list. Stores in
-# the Seurat object
-# @param object Name of Seurat object
+# Function to map values in a vector `v` as defined in `from`` to the values
+# defined in `to`.
 #
-# @return returns the Seurat object with command stored
+# @param v     vector of values to map
+# @param from  vector of original values
+# @param to    vector of values to map original values to (should be of equal
+#              length as from)
+# @return      returns vector of mapped values
 #
-LogSeuratCommand <- function(object, return.command = FALSE) {
-  time.stamp <- Sys.time()
-  #capture function name
-  command.name <- as.character(deparse(sys.calls()[[sys.nframe() - 1]]))
-  command.name <- gsub(pattern = ".Seurat", replacement = "", x = command.name)
-  call.string <- command.name
-  command.name <- ExtractField(string = command.name, field = 1, delim = "\\(")
-  #capture function arguments
-  argnames <- names(x = formals(fun = sys.function(which = sys.parent(n = 1))))
-  argnames <- grep(pattern = "object", x = argnames, invert = TRUE, value = TRUE)
-  argnames <- grep(pattern = "\\.\\.\\.", x = argnames, invert = TRUE, value = TRUE)
-  params <- list()
-  p.env <- parent.frame(n = 1)
-  argnames <- intersect(x = argnames, y = ls(name = p.env))
-  # fill in params list
-  for (arg in argnames) {
-    param_value <- get(x = arg, envir = p.env)
-    #TODO Institute some check of object size?
-    params[[arg]] <- param_value
+MapVals <- function(v, from, to) {
+  if (length(x = from) != length(x = to)) {
+    stop("from and to vectors are not the equal length.")
   }
-  # check if function works on the Assay and/or the DimReduc Level
-  assay <- params[["assay"]]
-  reduction <- params[["reduction"]]
-  if (class(x = reduction) == 'DimReduc') {
-    reduction = 'DimReduc'
-  }
-  # rename function name to include Assay/DimReduc info
-  command.name <- paste(command.name, assay, reduction, sep = '.')
-  command.name <- sub(pattern = "[\\.]+$", replacement = "", x = command.name, perl = TRUE)
-  command.name <- sub(pattern = "\\.\\.", replacement = "\\.", x = command.name, perl = TRUE)
-  if (return.command) {
-    return(command.name)
-  }
-  # store results
-  seurat.command <- new(
-    Class = 'SeuratCommand',
-    name = command.name,
-    params = params,
-    time.stamp = time.stamp,
-    call.string = call.string
-  )
-  object[[command.name]] <- seurat.command
-  return(object)
+  vals.to.match <- match(x = v, table = from)
+  vals.to.match.idx  <- !is.na(x = vals.to.match)
+  v[vals.to.match.idx] <- to[vals.to.match[vals.to.match.idx]]
+  return(v)
 }
 
 # Independently shuffle values within each row of a matrix
@@ -1321,6 +1674,39 @@ Melt <- function(x) {
   ))
 }
 
+# Give hints for old paramters and their newer counterparts
+#
+# This is a non-exhaustive list. If your function isn't working properly based
+# on the parameters you give it, please read the documentation for your function
+#
+# @param param A vector of paramters to get hints for
+#
+# @return Parameter hints for the specified paramters
+#
+OldParamHints <- function(param) {
+  param.conversion <- c(
+    'raw.data' = 'counts',
+    'min.genes' = 'min.features',
+    'features.plot' = 'features',
+    'pc.genes' = 'features',
+    'do.print' = 'verbose',
+    'genes.print' = 'nfeatures.print',
+    'pcs.print' = 'ndims.print',
+    'pcs.use' = 'dims',
+    'reduction.use' = 'reduction',
+    'cells.use' = 'cells',
+    'do.balanced' = 'balanced',
+    'display.progress' = 'verbose',
+    'print.output' = 'verbose',
+    'dims.use' = 'dims',
+    'reduction.type' = 'reduction',
+    'y.log' = 'log',
+    'cols.use' = 'cols',
+    'assay.use' = 'assay'
+  )
+  return(param.conversion[param])
+}
+
 # Check the existence of a package
 #
 # @param ... Package names
@@ -1371,19 +1757,26 @@ Parenting <- function(parent.find = 'Seurat', ...) {
   )
   parent.index <- grep(pattern = parent.find, x = calls)
   if (length(x = parent.index) != 1) {
-    stop("Cannot find a parent environment called ", parent.find)
-  }
-  to.parent <- list(...)
-  if (length(x = to.parent) == 0) {
-    stop("Nothing to parent")
-  } else if (is.null(x = names(x = to.parent))) {
-    stop("All input must be in a key = value pair")
-  } else if (length(x = Filter(f = nchar, x = names(x = to.parent))) != length(x = to.parent)) {
-    stop("All inputs must be named")
-  }
-  parent.environ <- sys.frame(which = parent.index)
-  for (i in 1:length(x = to.parent)) {
-    parent.environ[[names(x = to.parent)[i]]] <- to.parent[[i]]
+    warning(
+      "Cannot find a parent environment called ",
+      parent.find,
+      immediate. = TRUE,
+      call. = FALSE
+    )
+  } else {
+    to.parent <- list(...)
+    if (length(x = to.parent) == 0) {
+      warning("Nothing to parent", immediate. = TRUE, call. = FALSE)
+    } else if (is.null(x = names(x = to.parent))) {
+      stop("All input must be in a key = value pair")
+    } else if (length(x = Filter(f = nchar, x = names(x = to.parent))) != length(x = to.parent)) {
+      stop("All inputs must be named")
+    } else {
+      parent.environ <- sys.frame(which = parent.index)
+      for (i in 1:length(x = to.parent)) {
+        parent.environ[[names(x = to.parent)[i]]] <- to.parent[[i]]
+      }
+    }
   }
 }
 
@@ -1394,19 +1787,8 @@ Parenting <- function(parent.find = 'Seurat', ...) {
 #
 # @return Returns the percentage of `x` values above the given threshold
 #
-PercentAbove <- function(x, threshold){
+PercentAbove <- function(x, threshold) {
   return(length(x = x[x > threshold]) / length(x = x))
-}
-
-# Get the number of threads provided by the current plan
-#
-# @return The number of threads (workers) for the current future plan, or 1 if no workers detected
-#
-#' @importFrom future plan
-#
-PlanThreads <- function() {
-  nthreads <- eval(expr = formals(fun = plan())$workers)
-  return(nthreads %||% 1)
 }
 
 # Generate a random name
@@ -1422,6 +1804,7 @@ PlanThreads <- function() {
 # @seealso \code{\link{sample}}
 #
 RandomName <- function(length = 5L, ...) {
+  CheckDots(..., fxns = 'sample')
   return(paste(sample(x = letters, size = length, ...), collapse = ''))
 }
 
@@ -1441,19 +1824,23 @@ RowMergeSparseMatrices <- function(mat1, mat2){
   if (inherits(x = mat2, what = "data.frame")) {
     mat2 <- as.matrix(x = mat2)
   }
-  mat1 <- as(object = mat1, Class = "RsparseMatrix")
-  mat2 <- as(object = mat2, Class = "RsparseMatrix")
   mat1.names <- rownames(x = mat1)
   mat2.names <- rownames(x = mat2)
-  all.names <- union(x = mat1.names, y = mat2.names)
-  new.mat <- RowMergeMatrices(
-    mat1 = mat1,
-    mat2 = mat2,
-    mat1_rownames = mat1.names,
-    mat2_rownames = mat2.names,
-    all_rownames = all.names
-  )
-  rownames(x = new.mat) <- make.unique(names = all.names)
+  if (length(x = mat1.names) == length(x = mat2.names) && all(mat1.names == mat2.names)) {
+    new.mat <- cbind(mat1, mat2)
+  } else {
+    mat1 <- as(object = mat1, Class = "RsparseMatrix")
+    mat2 <- as(object = mat2, Class = "RsparseMatrix")
+    all.names <- union(x = mat1.names, y = mat2.names)
+    new.mat <- RowMergeMatrices(
+      mat1 = mat1,
+      mat2 = mat2,
+      mat1_rownames = mat1.names,
+      mat2_rownames = mat2.names,
+      all_rownames = all.names
+    )
+    rownames(x = new.mat) <- make.unique(names = all.names)
+  }
   colnames(x = new.mat) <- make.unique(names = c(
     colnames(x = mat1),
     colnames(x = mat2)

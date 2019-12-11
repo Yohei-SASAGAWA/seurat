@@ -5,15 +5,18 @@
 \title{Integrate data}
 \usage{
 IntegrateData(anchorset, new.assay.name = "integrated",
-  features = NULL, features.to.integrate = NULL, dims = 1:30,
-  k.weight = 100, weight.reduction = NULL, sd.weight = 1,
-  sample.tree = NULL, preserve.order = FALSE, do.cpp = TRUE,
-  eps = 0, verbose = TRUE)
+  normalization.method = c("LogNormalize", "SCT"), features = NULL,
+  features.to.integrate = NULL, dims = 1:30, k.weight = 100,
+  weight.reduction = NULL, sd.weight = 1, sample.tree = NULL,
+  preserve.order = FALSE, do.cpp = TRUE, eps = 0, verbose = TRUE)
 }
 \arguments{
 \item{anchorset}{Results from FindIntegrationAnchors}
 
 \item{new.assay.name}{Name for the new assay containing the integrated data}
+
+\item{normalization.method}{Name of normalization method used: LogNormalize
+or SCT}
 
 \item{features}{Vector of features to use when computing the PCA to determine the weights. Only set
 if you want a different set from those used in the anchor finding process}
@@ -30,10 +33,11 @@ This can be either:
 \itemize{
    \item{A string, specifying the name of a dimension reduction present in all objects to be integrated}
    \item{A vector of strings, specifying the name of a dimension reduction to use for each object to be integrated}
+   \item{A vector of Dimreduc objects, specifying the object to use for each object in the integration}
    \item{NULL, in which case a new PCA will be calculated and used to calculate anchor weights}
 }
 Note that, if specified, the requested dimension reduction will only be used for calculating anchor weights in the
-first merge between reference and query, as the merged object will subsequently contain more cells than was in 
+first merge between reference and query, as the merged object will subsequently contain more cells than was in
 query, and weights will need to be calculated for all cells in the object.}
 
 \item{sd.weight}{Controls the bandwidth of the Gaussian kernel for weighting}
@@ -52,5 +56,5 @@ query, and weights will need to be calculated for all cells in the object.}
 Returns a Seurat object with a new integrated Assay
 }
 \description{
-Integrates the data
+Perform dataset integration using a pre-computed anchorset
 }

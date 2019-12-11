@@ -9,31 +9,42 @@
 \usage{
 FindMarkers(object, ...)
 
-\method{FindMarkers}{default}(object, cells.1 = NULL, cells.2 = NULL,
-  features = NULL, logfc.threshold = 0.25, test.use = "wilcox",
-  min.pct = 0.1, min.diff.pct = -Inf, verbose = TRUE,
-  only.pos = FALSE, max.cells.per.ident = Inf, random.seed = 1,
-  latent.vars = NULL, min.cells.feature = 3, min.cells.group = 3,
-  pseudocount.use = 1, ...)
-
-\method{FindMarkers}{Seurat}(object, ident.1 = NULL, ident.2 = NULL,
-  group.by = NULL, subset.ident = NULL, assay = NULL,
-  reduction = NULL, features = NULL, logfc.threshold = 0.25,
+\method{FindMarkers}{default}(object, slot = "data",
+  counts = numeric(), cells.1 = NULL, cells.2 = NULL,
+  features = NULL, reduction = NULL, logfc.threshold = 0.25,
   test.use = "wilcox", min.pct = 0.1, min.diff.pct = -Inf,
   verbose = TRUE, only.pos = FALSE, max.cells.per.ident = Inf,
   random.seed = 1, latent.vars = NULL, min.cells.feature = 3,
   min.cells.group = 3, pseudocount.use = 1, ...)
+
+\method{FindMarkers}{Seurat}(object, ident.1 = NULL, ident.2 = NULL,
+  group.by = NULL, subset.ident = NULL, assay = NULL,
+  slot = "data", reduction = NULL, features = NULL,
+  logfc.threshold = 0.25, test.use = "wilcox", min.pct = 0.1,
+  min.diff.pct = -Inf, verbose = TRUE, only.pos = FALSE,
+  max.cells.per.ident = Inf, random.seed = 1, latent.vars = NULL,
+  min.cells.feature = 3, min.cells.group = 3, pseudocount.use = 1,
+  ...)
 }
 \arguments{
 \item{object}{An object}
 
 \item{...}{Arguments passed to other methods and to specific DE methods}
 
+\item{slot}{Slot to pull data from; note that if \code{test.use} is "negbinom", "poisson", or "DESeq2",
+\code{slot} will be set to "counts"}
+
+\item{counts}{Count matrix if using scale.data for DE tests. This is used for
+computing pct.1 and pct.2 and for filtering features based on fraction
+expressing}
+
 \item{cells.1}{Vector of cell names belonging to group 1}
 
 \item{cells.2}{Vector of cell names belonging to group 2}
 
 \item{features}{Genes to test. Default is to use all genes}
+
+\item{reduction}{Reduction to use in differential expression testing - will test for DE on cell embeddings}
 
 \item{logfc.threshold}{Limit testing to genes which show, on average, at least
 X-fold difference (log-scale) between the two groups of cells. Default is 0.25
@@ -53,7 +64,7 @@ Increasing logfc.threshold speeds up the function, but can miss weaker signals.}
  each of the cells in cells.2). An AUC value of 0 also means there is perfect
  classification, but in the other direction. A value of 0.5 implies that
  the gene has no predictive power to classify the two groups. Returns a
- 'predictive power' (abs(AUC-0.5)) ranked matrix of putative differentially
+ 'predictive power' (abs(AUC-0.5) * 2) ranked matrix of putative differentially
  expressed genes.
  \item{"t"} : Identify differentially expressed genes between two groups of
  cells using the Student's t-test.
@@ -67,10 +78,10 @@ Increasing logfc.threshold speeds up the function, but can miss weaker signals.}
  expressed genes. Constructs a logistic regression model predicting group
  membership based on each feature individually and compares this to a null
  model with a likelihood ratio test.
- \item{"MAST} : Identifies differentially expressed genes between two groups
+ \item{"MAST"} : Identifies differentially expressed genes between two groups
  of cells using a hurdle model tailored to scRNA-seq data. Utilizes the MAST
  package to run the DE testing.
- \item{"DESeq2} : Identifies differentially expressed genes between two groups
+ \item{"DESeq2"} : Identifies differentially expressed genes between two groups
  of cells based on a model using DESeq2 which uses a negative binomial
  distribution (Love et al, Genome Biology, 2014).This test does not support
  pre-filtering of genes based on average difference (or percent detection rate)
@@ -120,12 +131,16 @@ use all other cells for comparison; if an object of class \code{phylo} or
 \item{subset.ident}{Subset a particular identity class prior to regrouping. Only relevant if group.by is set (see example)}
 
 \item{assay}{Assay to use in differential expression testing}
-
-\item{reduction}{Reduction to use in differential expression testing - will test for DE on cell embeddings}
 }
 \value{
-Matrix containing a ranked list of putative markers, and associated
-statistics (p-values, ROC score, etc.)
+data.frame with a ranked list of putative markers as rows, and associated
+statistics as columns (p-values, ROC score, etc., depending on the test used (\code{test.use})). The following columns are always present:
+\itemize{
+  \item \code{avg_logFC}: log fold-chage of the average expression between the two groups. Positive values indicate that the gene is more highly expressed in the first group
+  \item \code{pct.1}: The percentage of cells where the gene is detected in the first group
+  \item \code{pct.2}: The percentage of cells where the gene is detected in the second group
+  \item \code{p_val_adj}: Adjusted p-value, based on bonferroni correction using all genes in the dataset
+}
 }
 \description{
 Finds markers (differentially expressed genes) for identity classes
@@ -143,7 +158,7 @@ same genes tested for differential expression.
 markers <- FindMarkers(object = pbmc_small, ident.1 = 2)
 head(x = markers)
 
-# Take all cells in cluster 2, and find markers that separate cells in the 'g1' group (metadata 
+# Take all cells in cluster 2, and find markers that separate cells in the 'g1' group (metadata
 # variable 'group')
 markers <- FindMarkers(pbmc_small, ident.1 = "g1", group.by = 'groups', subset.ident = "2")
 head(x = markers)

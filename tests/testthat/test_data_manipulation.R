@@ -1,4 +1,6 @@
 # Tests for functions in data_manipulation.cpp
+# change in random number generation in R3.6, this ensures tests will pass under older and newer Rs
+suppressWarnings(RNGversion(vstr = "3.5.3"))
 set.seed(42)
 library(Matrix)
 
@@ -36,20 +38,6 @@ test_that("Log Normalization returns expected values", {
   mat.norm <- LogNorm(mat, 1e4, display_progress = F)
   expect_equal(mat.norm[1, ], mat.norm.r[1, ])
   expect_equal(mat.norm[4, 4], mat.norm.r[4, 4])
-})
-
-# Tests for matrix multiply
-# --------------------------------------------------------------------------------
-context("Matrix Multiply")
-
-mat <- as.matrix(mat)
-
-test_that("Fast implementation of matrix multiply returns as expected", {
-  expect_equal(mat %*% mat, FastMatMult(mat, mat))
-  mat[1, 1] <- NA
-  expect_equal(mat %*% mat, FastMatMult(mat, mat))
-  mat[1, 1] <- NaN
-  expect_equal(mat %*% mat, FastMatMult(mat, mat))
 })
 
 # Tests for scaling data

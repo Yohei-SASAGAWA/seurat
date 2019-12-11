@@ -10,15 +10,17 @@ FindClusters(object, ...)
 
 \method{FindClusters}{default}(object, modularity.fxn = 1,
   initial.membership = NULL, weights = NULL, node.sizes = NULL,
-  resolution = 0.8, algorithm = 1, n.start = 10, n.iter = 10,
-  random.seed = 0, temp.file.location = NULL, edge.file.name = NULL,
-  verbose = TRUE, ...)
+  resolution = 0.8, method = "matrix", algorithm = 1, n.start = 10,
+  n.iter = 10, random.seed = 0, group.singletons = TRUE,
+  temp.file.location = NULL, edge.file.name = NULL, verbose = TRUE,
+  ...)
 
 \method{FindClusters}{Seurat}(object, graph.name = NULL,
   modularity.fxn = 1, initial.membership = NULL, weights = NULL,
   node.sizes = NULL, resolution = 0.8, algorithm = 1, n.start = 10,
-  n.iter = 10, random.seed = 0, temp.file.location = NULL,
-  edge.file.name = NULL, verbose = TRUE, ...)
+  n.iter = 10, random.seed = 0, group.singletons = TRUE,
+  temp.file.location = NULL, edge.file.name = NULL, verbose = TRUE,
+  ...)
 }
 \arguments{
 \item{object}{An object}
@@ -32,6 +34,9 @@ FindClusters(object, ...)
 \item{resolution}{Value of the resolution parameter, use a value above
 (below) 1.0 if you want to obtain a larger (smaller) number of communities.}
 
+\item{method}{Method for running leiden (defaults to matrix which is fast for small datasets).
+Enable method = "igraph" to avoid casting large data to a dense matrix.}
+
 \item{algorithm}{Algorithm for modularity optimization (1 = original Louvain
 algorithm; 2 = Louvain algorithm with multilevel refinement; 3 = SLM
 algorithm; 4 = Leiden algorithm). Leiden requires the leidenalg python.}
@@ -41,6 +46,9 @@ algorithm; 4 = Leiden algorithm). Leiden requires the leidenalg python.}
 \item{n.iter}{Maximal number of iterations per random start.}
 
 \item{random.seed}{Seed of the random number generator.}
+
+\item{group.singletons}{Group singletons into nearest cluster. If FALSE, assign all singletons to
+a "singleton" group}
 
 \item{temp.file.location}{Directory where intermediate files will be written.
 Specify the ABSOLUTE path.}
@@ -52,8 +60,9 @@ Specify the ABSOLUTE path.}
 \item{graph.name}{Name of graph to use for the clustering algorithm}
 }
 \value{
-Returns a Seurat object and optionally the SNN matrix,
-        object idents have been updated with new cluster info
+Returns a Seurat object where the idents have been updated with new cluster info;
+latest clustering results will be stored in object metadata under 'seurat_clusters'.
+Note that 'seurat_clusters' will be overwritten everytime FindClusters is run
 }
 \description{
 Identify clusters of cells by a shared nearest neighbor (SNN) modularity

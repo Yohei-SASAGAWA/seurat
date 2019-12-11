@@ -4,24 +4,26 @@
 \alias{AverageExpression}
 \title{Averaged feature expression by identity class}
 \usage{
-AverageExpression(object, assay = NULL, features = NULL,
-  return.seurat = FALSE, add.ident = NULL, use.scale = FALSE,
-  use.counts = FALSE, verbose = TRUE, ...)
+AverageExpression(object, assays = NULL, features = NULL,
+  return.seurat = FALSE, add.ident = NULL, slot = "data",
+  use.scale = FALSE, use.counts = FALSE, verbose = TRUE, ...)
 }
 \arguments{
 \item{object}{Seurat object}
 
-\item{assay}{Which assay to use. Default is all assays.}
+\item{assays}{Which assays to use. Default is all assays}
 
-\item{features}{Features to analyze. Default is all features in the assay.}
+\item{features}{Features to analyze. Default is all features in the assay}
 
-\item{return.seurat}{Whether to return the data as a Seurat object. Default is FALSE.}
+\item{return.seurat}{Whether to return the data as a Seurat object. Default is FALSE}
 
-\item{add.ident}{Place an additional label on each cell prior to averaging (very useful if you want to observe cluster averages, separated by replicate, for example).}
+\item{add.ident}{Place an additional label on each cell prior to averaging (very useful if you want to observe cluster averages, separated by replicate, for example)}
 
-\item{use.scale}{Use scaled values for gene expression}
+\item{slot}{Slot to use; will be overriden by \code{use.scale} and \code{use.counts}}
 
-\item{use.counts}{Use count values for gene expression}
+\item{use.scale}{Use scaled values for feature expression}
+
+\item{use.counts}{Use count values for feature expression}
 
 \item{verbose}{Print messages and show progress bar}
 

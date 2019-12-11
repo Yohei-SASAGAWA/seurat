@@ -5,9 +5,11 @@
 \title{Feature expression heatmap}
 \usage{
 DoHeatmap(object, features = NULL, cells = NULL, group.by = "ident",
-  group.bar = TRUE, disp.min = -2.5, disp.max = NULL,
-  slot = "scale.data", assay = NULL, label = TRUE, size = 5.5,
-  hjust = 0, angle = 45, raster = TRUE, combine = TRUE)
+  group.bar = TRUE, group.colors = NULL, disp.min = -2.5,
+  disp.max = NULL, slot = "scale.data", assay = NULL, label = TRUE,
+  size = 5.5, hjust = 0, angle = 45, raster = TRUE,
+  draw.lines = TRUE, lines.width = NULL, group.bar.height = 0.02,
+  combine = TRUE)
 }
 \arguments{
 \item{object}{Seurat object}
@@ -19,6 +21,8 @@ DoHeatmap(object, features = NULL, cells = NULL, group.by = "ident",
 \item{group.by}{A vector of variables to group cells by; pass 'ident' to group by cell identity classes}
 
 \item{group.bar}{Add a color bar showing group status for cells}
+
+\item{group.colors}{Colors to use for the color bar}
 
 \item{disp.min}{Minimum display value (all values below are clipped)}
 
@@ -41,7 +45,14 @@ if \code{slot} is 'scale.data', 6 otherwise}
 some viewing applications such as Preview due to how the raster is interpolated. Set this to FALSE
 if you are encountering that issue (note that plots may take longer to produce/render).}
 
-\item{combine}{Combine plots into a single gg object; note that if TRUE; themeing will not work 
+\item{draw.lines}{Include white lines to separate the groups}
+
+\item{lines.width}{Integer number to adjust the width of the separating white lines.
+Corresponds to the number of "cells" between each group.}
+
+\item{group.bar.height}{Scale the height of the color bar}
+
+\item{combine}{Combine plots into a single gg object; note that if TRUE; themeing will not work
 when plotting multiple dimensions}
 }
 \value{

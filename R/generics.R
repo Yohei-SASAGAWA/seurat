@@ -33,8 +33,20 @@ AddMetaData <- function(object, metadata, col.name = NULL) {
   UseMethod(generic = 'AddMetaData', object = object)
 }
 
-#' Convert a matrix (or Matrix) to the Graph class.
+#' Convert objects to CellDataSet objects
+#'
+#' @param x An object to convert to class \code{CellDataSet}
+#' @param ... Arguments passed to other methods
+#'
+#' @rdname as.CellDataSet
+#' @export as.CellDataSet
+#'
+as.CellDataSet <- function(x, ...) {
+  UseMethod(generic = 'as.CellDataSet', object = x)
+}
 
+#' Convert a matrix (or Matrix) to the Graph class.
+#'
 #' @param x The matrix to convert
 #' @param ... Arguments passed to other methods (ignored for now)
 #'
@@ -45,9 +57,24 @@ as.Graph <- function(x, ...) {
   UseMethod(generic = "as.Graph", object = x)
 }
 
+#' Convert objects to loom objects
+#'
+#' @param x An object to convert to class \code{loom}
+#' @inheritParams loomR::create
+#'
+#' @seealso \code{\link[loomR]{create}}
+#'
+#' @rdname as.loom
+#' @export as.loom
+#'
+as.loom <- function(x, ...) {
+  UseMethod(generic = 'as.loom', object = x)
+}
+
 #' Convert objects to Seurat objects
 #'
 #' @param x An object to convert to class \code{Seurat}
+#' @param ... Arguments passed to other methods
 #'
 #' @rdname as.Seurat
 #' @export as.Seurat
@@ -59,6 +86,7 @@ as.Seurat <- function(x, ...) {
 #' Convert objects to SingleCellExperiment objects
 #'
 #' @param x An object to convert to class \code{SingleCellExperiment}
+#' @param ... Arguments passed to other methods
 #'
 #' @rdname as.SingleCellExperiment
 #' @export as.SingleCellExperiment
@@ -83,8 +111,7 @@ as.sparse <- function(x, ...) {
 
 #' Get cells present in an object
 #'
-#' @param object An object
-#' @param ... Arguments passed to other methods
+#' @param x An object
 #'
 #' @return A vector of cell names
 #'
@@ -92,10 +119,10 @@ as.sparse <- function(x, ...) {
 #' @export Cells
 #'
 #' @examples
-#' Cells(object = pbmc_small)
+#' Cells(x = pbmc_small)
 #'
-Cells <- function(object, ...) {
-  UseMethod(generic = 'Cells', object = object)
+Cells <- function(x) {
+  UseMethod(generic = 'Cells', object = x)
 }
 
 #' Get SeuratCommands
@@ -112,25 +139,6 @@ Cells <- function(object, ...) {
 #'
 Command <- function(object, ...) {
   UseMethod(generic = 'Command', object = object)
-}
-
-#' Convert Seurat objects to other classes and vice versa
-#'
-#' Defunct, please use other converters to convert to and from \code{Seurat} objects
-#'
-#' @param from Object to convert from
-#' @param to Class of object to convert to
-#' @param ... Arguments passed to other methods
-#'
-#' @return An object of class \code{to}
-#'
-#' @seealso \code{\link{WriteH5AD}} \code{\link{as.Seurat}} \code{\link{as.SingleCellExperiment}}
-#'
-#' @rdname Convert
-#' @export Convert
-#'
-Convert <- function(from, ...) {
-  UseMethod(generic = 'Convert', object = from)
 }
 
 #' Get and set the default assay
@@ -187,8 +195,9 @@ Embeddings <- function(object, ...) {
 #' @param object An object
 #' @param ... Arguments passed to other methods
 #'
-#' @return Returns a Seurat object and optionally the SNN matrix,
-#'         object idents have been updated with new cluster info
+#' @return Returns a Seurat object where the idents have been updated with new cluster info;
+#' latest clustering results will be stored in object metadata under 'seurat_clusters'.
+#' Note that 'seurat_clusters' will be overwritten everytime FindClusters is run
 #'
 #' @export
 #'
@@ -206,8 +215,14 @@ FindClusters <- function(object, ...) {
 #' @param object An object
 #' @param ... Arguments passed to other methods and to specific DE methods
 
-#' @return Matrix containing a ranked list of putative markers, and associated
-#' statistics (p-values, ROC score, etc.)
+#' @return data.frame with a ranked list of putative markers as rows, and associated
+#' statistics as columns (p-values, ROC score, etc., depending on the test used (\code{test.use})). The following columns are always present:
+#' \itemize{
+#'   \item \code{avg_logFC}: log fold-chage of the average expression between the two groups. Positive values indicate that the gene is more highly expressed in the first group
+#'   \item \code{pct.1}: The percentage of cells where the gene is detected in the first group
+#'   \item \code{pct.2}: The percentage of cells where the gene is detected in the second group
+#'   \item \code{p_val_adj}: Adjusted p-value, based on bonferroni correction using all genes in the dataset
+#' }
 #'
 #' @details p-value adjustment is performed using bonferroni correction based on
 #' the total number of genes in the dataset. Other correction methods are not
@@ -236,11 +251,11 @@ FindClusters <- function(object, ...) {
 #' markers <- FindMarkers(object = pbmc_small, ident.1 = 2)
 #' head(x = markers)
 #'
-#' # Take all cells in cluster 2, and find markers that separate cells in the 'g1' group (metadata 
+#' # Take all cells in cluster 2, and find markers that separate cells in the 'g1' group (metadata
 #' # variable 'group')
 #' markers <- FindMarkers(pbmc_small, ident.1 = "g1", group.by = 'groups', subset.ident = "2")
 #' head(x = markers)
-#' 
+#'
 #' # Pass 'clustertree' or an object of class phylo to ident.1 and
 #' # a node to ident.2 as a replacement for FindMarkersNode
 #' pbmc_small <- BuildClusterTree(object = pbmc_small)
@@ -390,8 +405,8 @@ Idents <- function(object, ... ) {
 #' head(x = Idents(object = pbmc_small))
 #'
 #' # Can also set idents from a value in object metadata
-#' pbmc_small$groups <- sample(x = c('g1', 'g2'), size = ncol(x = pbmc_small), replace = TRUE)
-#' Idents(object = pbmc_small) <- 'groups'
+#' colnames(x = pbmc_small[[]])
+#' Idents(object = pbmc_small) <- 'RNA_snn_res.1'
 #' levels(x = pbmc_small)
 #'
 "Idents<-" <- function(object, ..., value) {
@@ -528,30 +543,88 @@ NormalizeData <- function(object, ...) {
 #' @export OldWhichCells
 #'
 #' @examples
+#' \dontrun{
 #' OldWhichCells(object = pbmc_small, ident.keep = 2)
+#' }
 #'
 OldWhichCells <- function(object, ...) {
   UseMethod(generic = 'OldWhichCells', object = object)
 }
 
-#' @inheritParams Idents
-#' @param var Feature or variable to order on
+#' Get and set project information
 #'
-#' @return \code{ReorderIdent}: An object with
+#' @param object An object
+#' @param ... Arguments passed to other methods
 #'
-#' @rdname Idents
-#' @export ReorderIdent
-#' @aliases ReorderIdent
+#' @return Project information
 #'
-#' @examples
-#' \dontrun{
-#' head(x = Idents(object = pbmc_small))
-#' pbmc_small <- ReorderIdent(object = pbmc_small, vars = 'PC_1')
-#' head(x = Idents(object = pbmc_small))
+#' @rdname Project
+#' @export Project
+#'
+Project <- function(object, ...) {
+  UseMethod(generic = 'Project', object = object)
+}
+
+#' @param value Project information to set
+#'
+#' @return An object with project information added
+#'
+#' @rdname Project
+#' @export Project<-
+#'
+"Project<-" <- function(object, ..., value) {
+  UseMethod(generic = 'Project<-', object = object)
+}
+
+#' Read from and write to h5ad files
+#'
+#' Utilize the Anndata h5ad file format for storing and sharing single-cell expression
+#' data. Provided are tools for writing objects to h5ad files, as well as reading
+#' h5ad files into a Seurat object
+#'
+#' @details
+#' \code{ReadH5AD} and \code{WriteH5AD} will try to automatically fill slots based
+#' on data type and presence. For example, objects will be filled with scaled and
+#' normalized data if \code{adata.X} is a dense matrix and \code{raw} is present
+#' (when reading), or if the \code{scale.data} slot is filled (when writing). The
+#' following is a list of how objects will be filled
+#' \describe{
+#'   \item{\code{adata.X} is dense and \code{adata.raw} is filled; \code{ScaleData} is filled}{Objects will be filled with scaled and normalized data}
+#'   \item{
+#'     \code{adata.X} is sparse and \code{adata.raw} is filled; \code{NormalizeData} has been run, \code{ScaleData} has not been run
+#'   }{
+#'     Objects will be filled with normalized and raw data
+#'   }
+#'   \item{\code{adata.X} is sparse and \code{adata.raw} is not filled; \code{NormalizeData} has not been run}{Objects will be filled with raw data only}
 #' }
+#' In addition, dimensional reduction information and nearest-neighbor graphs will
+#' be searched for and added if and only if scaled data is being added.
 #'
-ReorderIdent <- function(object, var, ...) {
-  UseMethod(generic = 'ReorderIdent', object = object)
+#' When reading: project name is \code{basename(file)}; identity classes will be
+#' set as the project name; all cell-level metadata from \code{adata.obs} will be
+#' taken; feature level metadata from \code{data.var} and \code{adata.raw.var}
+#' (if present) will be merged and stored in assay \code{meta.features}; highly
+#' variable features will be set if \code{highly_variable} is present in feature-level
+#' metadata; dimensional reduction objects will be given the assay name provided
+#' to the function call; graphs will be named \code{assay_method} if method is
+#' present, otherwise \code{assay_adata}
+#'
+#' When writing: only one assay will be written; all dimensional reductions and
+#' graphs associated with that assay will be stored, no other reductions or graphs
+#' will be written; active identity classes will be stored in \code{adata.obs} as
+#' \code{active_ident}
+#'
+#' @param file Name of h5ad file, or an H5File object for reading in
+#'
+#' @return \code{ReadH5AD}: A Seurat object with data from the h5ad file
+#'
+#' @aliases ReadH5AD
+#'
+#' @rdname h5ad
+#' @export ReadH5AD
+#'
+ReadH5AD <- function(file, ...) {
+  UseMethod(generic = 'ReadH5AD', object = file)
 }
 
 #' Rename cells
@@ -583,11 +656,31 @@ RenameCells <- function(object, ...) {
 #' # Rename cell identity classes
 #' # Can provide an arbitrary amount of idents to rename
 #' levels(x = pbmc_small)
-#' pbmc_small <- RenameIdents(object = pbmc_small, 'g1' = 'clusterA', 'g2' = 'clusterB')
+#' pbmc_small <- RenameIdents(object = pbmc_small, '0' = 'A', '2' = 'C')
 #' levels(x = pbmc_small)
 #'
 RenameIdents <- function(object, ...) {
   UseMethod(generic = 'RenameIdents', object = object)
+}
+
+#' @inheritParams Idents
+#' @param var Feature or variable to order on
+#'
+#' @return \code{ReorderIdent}: An object with
+#'
+#' @rdname Idents
+#' @export ReorderIdent
+#' @aliases ReorderIdent
+#'
+#' @examples
+#' \dontrun{
+#' head(x = Idents(object = pbmc_small))
+#' pbmc_small <- ReorderIdent(object = pbmc_small, var = 'PC_1')
+#' head(x = Idents(object = pbmc_small))
+#' }
+#'
+ReorderIdent <- function(object, var, ...) {
+  UseMethod(generic = 'ReorderIdent', object = object)
 }
 
 #' Run Adaptively-thresholded Low Rank Approximation (ALRA)
@@ -597,6 +690,9 @@ RenameIdents <- function(object, ...) {
 #' error distribution learned from the negative values. Described in
 #' Linderman, G. C., Zhao, J., Kluger, Y. (2018). "Zero-preserving imputation
 #' of scRNA-seq data using low rank approximation." (bioRxiv:138677)
+#'
+#' @note RunALRA and associated functions are being moved to SeuratWrappers;
+#' for more information on SeuratWrappers, please see \url{https://github.com/satijalab/seurat-wrappers}
 #'
 #' @param object An object
 #' @param ... Arguments passed to other methods
@@ -625,6 +721,13 @@ RenameIdents <- function(object, ...) {
 #' }
 #'
 RunALRA <- function(object, ...) {
+  .Deprecated(
+    new = 'SeruatWrappers::RunALRA',
+    msg = paste(
+      'RunALRA and associated functions are being moved to SeuratWrappers;',
+      'for more information on SeuratWrappers, please see https://github.com/satijalab/seurat-wrappers'
+    )
+  )
   UseMethod(generic = 'RunALRA', object = object)
 }
 
@@ -647,8 +750,8 @@ RunALRA <- function(object, ...) {
 #' @examples
 #' pbmc_small
 #' # As CCA requires two datasets, we will split our test object into two just for this example
-#' pbmc1 <- SubsetData(pbmc_small, cells = colnames(x = pbmc_small)[1:40])
-#' pbmc2 <- SubsetData(pbmc_small, cells = colnames(x = pbmc_small)[41:80])
+#' pbmc1 <- subset(pbmc_small, cells = colnames(pbmc_small)[1:40])
+#' pbmc2 <- subset(pbmc_small, cells = colnames(x = pbmc_small)[41:80])
 #' pbmc1[["group"]] <- "group1"
 #' pbmc2[["group"]] <- "group2"
 #' pbmc_cca <- RunCCA(object1 = pbmc1, object2 = pbmc2)
@@ -681,6 +784,11 @@ RunICA <- function(object, ...) {
 #'
 #' For details about stored LSI calculation parameters, see
 #' \code{PrintLSIParams}.
+#' 
+#' @note RunLSI is being moved to Signac. Equivalent functionality can be 
+#' achieved via the Signac::RunTFIDF and Signac::RunSVD functions; 
+#' for more information on Signac, please see
+#' \url{https://github.com/timoast/Signac}
 #'
 #' @param object Seurat object
 #' @param ... Arguments passed to other methods
@@ -689,6 +797,14 @@ RunICA <- function(object, ...) {
 #' @export RunLSI
 #'
 RunLSI <- function(object, ...) {
+  .Deprecated(
+    new = 'Signac::RunTFIDF',
+    msg = paste(
+      "RunLSI is being moved to Signac. Equivalent functionality can be", 
+      "achieved via the Signac::RunTFIDF and Signac::RunSVD functions; for",
+      "more information on Signac, please see https://github.com/timoast/Signac"
+    )
+  )
   UseMethod(generic = "RunLSI", object = object)
 }
 
@@ -875,9 +991,8 @@ SetAssayData <- function(object, ...) {
 #'
 #' @examples
 #' # Set cell identity classes using SetIdent
-#' ident.levels <- levels(x = pbmc_small)
-#' cells.use <- WhichCells(object = pbmc_small, idents = ident.levels[1])
-#' pbmc_small <- SetIdent(object = pbmc_small, cells = cells.use, value = 'cluster0')
+#' cells.use <- WhichCells(object = pbmc_small, idents = '1')
+#' pbmc_small <- SetIdent(object = pbmc_small, cells = cells.use, value = 'B')
 #'
 SetIdent <- function(object, ...) {
   UseMethod(generic = 'SetIdent', object = object)
@@ -924,8 +1039,10 @@ Stdev <- function(object, ...) {
 #' @export SubsetData
 #'
 #' @examples
+#' \dontrun{
 #' pbmc1 <- SubsetData(object = pbmc_small, cells = colnames(x = pbmc_small)[1:40])
 #' pbmc1
+#' }
 #'
 SubsetData <- function(object, ...) {
   UseMethod(generic = 'SubsetData', object = object)
@@ -969,6 +1086,7 @@ Tool <- function(object, ...) {
 #' Get and set variable feature information
 #'
 #' @param object An object
+#' @param selection.method Method used to set variable features
 #' @param ... Arguments passed to other methods
 #'
 #' @rdname VariableFeatures
@@ -1012,44 +1130,6 @@ WhichCells <- function(object, ...) {
   UseMethod(generic = 'WhichCells', object = object)
 }
 
-#' Read from and write to h5ad files
-#'
-#' Utilize the Anndata h5ad file format for storing and sharing single-cell expression
-#' data. Provided are tools for writing objects to h5ad files, as well as reading
-#' h5ad files into a Seurat object
-#'
-#' @details
-#' \code{ReadH5AD} and \code{WriteH5AD} will try to automatically fill slots based
-#' on data type and presence. For example, objects will be filled with scaled and
-#' normalized data if \code{adata.X} is a dense matrix and \code{raw} is present
-#' (when reading), or if the \code{scale.data} slot is filled (when writing). The
-#' following is a list of how objects will be filled
-#' \describe{
-#'   \item{\code{adata.X} is dense and \code{adata.raw} is filled; \code{ScaleData} is filled}{Objects will be filled with scaled and normalized data}
-#'   \item{
-#'     \code{adata.X} is sparse and \code{adata.raw} is filled; \code{NormalizeData} has been run, \code{ScaleData} has not been run
-#'   }{
-#'     Objects will be filled with normalized and raw data
-#'   }
-#'   \item{\code{adata.X} is sparse and \code{adata.raw} is not filled; \code{NormalizeData} has not been run}{Objects will be filled with raw data only}
-#' }
-#' In addition, dimensional reduction information and nearest-neighbor graphs will
-#' be searched for and added if and only if scaled data is being added.
-#'
-#' When reading: project name is \code{basename(file)}; identity classes will be
-#' set as the project name; all cell-level metadata from \code{adata.obs} will be
-#' taken; feature level metadata from \code{data.var} and \code{adata.raw.var}
-#' (if present) will be merged and stored in assay \code{meta.features}; highly
-#' variable features will be set if \code{highly_variable} is present in feature-level
-#' metadata; dimensional reduction objects will be given the assay name provided
-#' to the function call; graphs will be named \code{assay_method} if method is
-#' present, otherwise \code{assay_adata}
-#'
-#' When writing: only one assay will be written; all dimensional reductions and
-#' graphs associated with that assay will be stored, no other reductions or graphs
-#' will be written; active identity classes will be stored in \code{adata.obs} as
-#' \code{active_ident}
-#'
 #' @param object An object
 #' @param ... arguments passed to other methods
 #'
