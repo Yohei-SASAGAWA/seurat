@@ -1486,12 +1486,13 @@ RunPHATE.default <- function(
   object,
   assay = NULL,
   n.components = 2L,
-  k = 15L,
-  alpha = 10L,
+  knn = 15L,
+  decay = 10L,
   n.landmark=2000L,
   gamma = 1,
   t = "auto",
   knn.dist.method = "euclidean",
+  mds.solver = "sgd",
   mds.method = "metric",
   mds.dist.method = "euclidean",
   t.max=100,
@@ -1501,22 +1502,33 @@ RunPHATE.default <- function(
   n.jobs = 1,
   seed.use = NA,
   reduction.key = "PHATE_",
+  k = NULL,
+  decay = NULL,
   ...
 ) {
   if (!PackageCheck('phateR', error = FALSE)) {
     stop("Please install phateR - learn more at https://github.com/KrishnaswamyLab/phateR")
   }
+  if (!is.null(k)) {
+    message("Argument k is deprecated. Using knn instead.")
+    knn <- k
+  }
+  if (!is.null(alpha)) {
+    message("Argument alpha is deprecated. Using decay instead.")
+    decay <- alpha
+  }
   CheckDots(...)
   phate_output <- phateR::phate(
     object,
     ndim = n.components,
-    k = k,
-    alpha = alpha,
+    knn = knn,
+    decay = decay,
     n.landmark = n.landmark,
     gamma = gamma,
     t = t,
     knn.dist.method = knn.dist.method,
     init = NULL,
+    mds.solver = mds.solver,
     mds.method = mds.method,
     mds.dist.method = mds.dist.method,
     t.max = t.max,
@@ -1610,6 +1622,8 @@ RunPHATE.default <- function(
 #' the object$dr list. phate by default
 #' @param reduction.key dimensional reduction key, specifies the string before
 #' the number for the dimension names. PHATE_ by default
+#' @param k Deprecated. Use `knn`.
+#' @param alpha Deprecated. Use `decay`.
 #'
 #' @return Returns a Seurat object containing a PHATE representation
 #'
