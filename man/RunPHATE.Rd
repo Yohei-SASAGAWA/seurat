@@ -8,20 +8,56 @@
 \usage{
 RunPHATE(object, ...)
 
-\method{RunPHATE}{default}(object, assay = "RNA", n.components = 2L,
-  k = 15L, alpha = 10L, n.landmark = 2000L, gamma = 1,
-  t = "auto", knn.dist.method = "euclidean", mds.method = "metric",
-  mds.dist.method = "euclidean", t.max = 100, npca = 100,
-  plot.optimal.t = FALSE, verbose = 1, n.jobs = 1, seed.use = NA,
-  reduction.key = "PHATE_", ...)
+\method{RunPHATE}{default}(
+  object,
+  assay = NULL,
+  n.components = 2L,
+  knn = 5L,
+  decay = 40L,
+  n.landmark = 2000L,
+  gamma = 1,
+  t = "auto",
+  knn.dist.method = "euclidean",
+  mds.solver = "sgd",
+  mds.method = "metric",
+  mds.dist.method = "euclidean",
+  t.max = 100,
+  npca = 100,
+  plot.optimal.t = FALSE,
+  verbose = 1,
+  n.jobs = 1,
+  seed.use = NA,
+  reduction.key = "PHATE_",
+  k = NULL,
+  alpha = NULL,
+  ...
+)
 
-\method{RunPHATE}{Seurat}(object, dims = NULL, reduction = "pca",
-  features = NULL, assay = "RNA", n.components = 2L, k = 15L,
-  alpha = 10L, n.landmark = 2000L, gamma = 1, t = "auto",
-  knn.dist.method = "euclidean", mds.method = "metric",
-  mds.dist.method = "euclidean", t.max = 100, npca = 100,
-  plot.optimal.t = FALSE, verbose = 1, n.jobs = 1, seed.use = NA,
-  reduction.name = "phate", reduction.key = "PHATE_", ...)
+\method{RunPHATE}{Seurat}(
+  object,
+  dims = NULL,
+  reduction = "pca",
+  features = NULL,
+  assay = "RNA",
+  n.components = 2L,
+  k = 5L,
+  alpha = 40L,
+  n.landmark = 2000L,
+  gamma = 1,
+  t = "auto",
+  knn.dist.method = "euclidean",
+  mds.method = "metric",
+  mds.dist.method = "euclidean",
+  t.max = 100,
+  npca = 100,
+  plot.optimal.t = FALSE,
+  verbose = 1,
+  n.jobs = 1,
+  seed.use = NA,
+  reduction.name = "phate",
+  reduction.key = "PHATE_",
+  ...
+)
 }
 \arguments{
 \item{object}{An object}
@@ -32,10 +68,10 @@ RunPHATE(object, ...)
 
 \item{n.components}{Total number of dimensions to embed in PHATE.}
 
-\item{k}{int, optional, default: 15
+\item{knn}{int, optional, default: 5
 number of nearest neighbors on which to build kernel}
 
-\item{alpha}{int, optional, default: 10
+\item{decay}{int, optional, default: 40
 sets decay rate of kernel tails.
 If NA, alpha decaying kernel is not used}
 
@@ -97,6 +133,10 @@ n_jobs = -2, all CPUs but one are used}
 
 \item{reduction.key}{dimensional reduction key, specifies the string before
 the number for the dimension names. PHATE_ by default}
+
+\item{k}{Deprecated. Use `knn`.}
+
+\item{alpha}{Deprecated. Use `decay`.}
 
 \item{dims}{Which dimensions to use as input features, used only if
 \code{features} is NULL}

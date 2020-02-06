@@ -44,6 +44,7 @@ Imports:
     Matrix (>= 1.2-14),
     metap,
     pbapply,
+    phateR,
     plotly,
     png,
     RANN,

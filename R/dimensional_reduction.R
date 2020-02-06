@@ -1584,9 +1584,9 @@ RunPHATE.default <- function(
 #' on features
 #' @param assay Assay to pull data for when using \code{features}
 #' @param n.components Total number of dimensions to embed in PHATE.
-#' @param k int, optional, default: 15
+#' @param knn int, optional, default: 5
 #' number of nearest neighbors on which to build kernel
-#' @param alpha int, optional, default: 10
+#' @param decay int, optional, default: 40
 #' sets decay rate of kernel tails.
 #' If NA, alpha decaying kernel is not used
 #' @param n.landmark int, optional, default: 2000
@@ -1683,8 +1683,8 @@ RunPHATE.Seurat <- function(
   features = NULL,
   assay = 'RNA',
   n.components = 2L,
-  k = 15L,
-  alpha = 10L,
+  k = 5L,
+  alpha = 40L,
   n.landmark=2000L,
   gamma = 1,
   t = "auto",
