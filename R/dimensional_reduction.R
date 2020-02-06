@@ -1518,7 +1518,7 @@ RunPHATE.default <- function(
   seed.use = NA,
   reduction.key = "PHATE_",
   k = NULL,
-  decay = NULL,
+  alpha = NULL,
   ...
 ) {
   if (!PackageCheck('phateR', error = FALSE)) {
